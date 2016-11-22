@@ -41,6 +41,11 @@ public class RenderSetUpFrame extends JFrame
 	private JLabel imageSizeCommaLabel = new JLabel(",");
 	private JTextField imageSizeyTextField = new JTextField();
 	
+	private JCheckBox useThreadsCheckBox = new JCheckBox("Use threads");
+	
+	private JLabel numThreadsLabel = new JLabel("Number of threads: ");
+	private JTextField numThreadsTextField = new JTextField("1");
+	
 	private JButton saveButton = new JButton(saveText);
 	private JProgressBar progressBar = new JProgressBar();
 	
@@ -51,6 +56,7 @@ public class RenderSetUpFrame extends JFrame
 	public RenderSetUpFrame()
 	{
 		this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		this.setTitle("Mandelbrot Set Renderer");
 		JPanel panel = new JPanel();
 		BoxLayout mainLayout = new BoxLayout(panel, BoxLayout.PAGE_AXIS);
 		panel.setLayout(mainLayout);
@@ -100,7 +106,7 @@ public class RenderSetUpFrame extends JFrame
 		panel.add(example3Button);
 		example3Button.addActionListener(new ButtonListener());
 		
-		// center coordinate things
+		// image size things
 		JPanel imageSizePanel = new JPanel();
 		BoxLayout imageSizeLayout = new BoxLayout(imageSizePanel, BoxLayout.LINE_AXIS);
 		imageSizePanel.setLayout(imageSizeLayout);
@@ -112,6 +118,21 @@ public class RenderSetUpFrame extends JFrame
 		imageSizeyTextField.setMaximumSize(new Dimension(100, 20));
 		panel.add(imageSizePanel);
 		imageSizePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		
+		// use threads things
+		panel.add(useThreadsCheckBox);
+		useThreadsCheckBox.addActionListener(new ButtonListener());
+		setUseThreads(false);
+		
+		// number of threads things
+		JPanel numThreadsPanel = new JPanel();
+		BoxLayout numThreadsLayout = new BoxLayout(numThreadsPanel, BoxLayout.LINE_AXIS);
+		numThreadsPanel.setLayout(numThreadsLayout);
+		numThreadsPanel.add(numThreadsLabel);
+		numThreadsPanel.add(numThreadsTextField);
+		numThreadsTextField.setMaximumSize(new Dimension(100, 20));
+		panel.add(numThreadsPanel);
+		numThreadsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
 		// save button
 		saveButton.addActionListener(new ButtonListener());
@@ -131,6 +152,17 @@ public class RenderSetUpFrame extends JFrame
 	}
 	
 	/**
+	 * Sets whether multithreading should be used
+	 * @param useThreads true if multithreading should be used
+	 */
+    public void setUseThreads(boolean useThreads)
+    {
+        useThreadsCheckBox.setSelected(useThreads);
+        numThreadsLabel.setEnabled(useThreads);
+        numThreadsTextField.setEnabled(useThreads);
+    }
+	
+	/**
 	 * Checks if all the numeric text fields are valid numbers
 	 * @return true if they are valid, false otherwise
 	 */
@@ -141,9 +173,26 @@ public class RenderSetUpFrame extends JFrame
 			new Double(centerCoordxTextField.getText());
 			new Double(centerCoordyTextField.getText());
 			new Double(unitsPerPixelTextField.getText());
-			new Integer(maxStepsTextField.getText());
-			new Integer(imageSizexTextField.getText());
-			new Integer(imageSizeyTextField.getText());
+			int maxSteps = new Integer(maxStepsTextField.getText());
+			if (maxSteps <= 0)
+			{
+			    return false;
+			}
+			int x = new Integer(imageSizexTextField.getText());
+			if (x <= 0)
+			{
+			    return false;
+			}
+			int y = new Integer(imageSizeyTextField.getText());
+			if (y <= 0)
+			{
+			    return false;
+			}
+			int numThreads = new Integer(numThreadsTextField.getText());
+			if (numThreads <= 0)
+			{
+			    return false;
+			}
 		} catch (NumberFormatException e)
 		{
 			return false;
@@ -156,21 +205,21 @@ public class RenderSetUpFrame extends JFrame
 		@Override
 		public void actionPerformed(ActionEvent e)
 		{
-			if (((JButton)(e.getSource())).getText().equals(ex1Text))
+			if (e.getSource() instanceof JButton && ((JButton)(e.getSource())).getText().equals(ex1Text))
 			{
 				RenderSetUpFrame.this.centerCoordxTextField.setText("-0.6");
 				RenderSetUpFrame.this.centerCoordyTextField.setText("0");
 				RenderSetUpFrame.this.unitsPerPixelTextField.setText("0.003");
 				RenderSetUpFrame.this.imageSizexTextField.setText("1366");
 				RenderSetUpFrame.this.imageSizeyTextField.setText("768");
-			} else if (((JButton)(e.getSource())).getText().equals(ex2Text))
+			} else if (e.getSource() instanceof JButton && ((JButton)(e.getSource())).getText().equals(ex2Text))
 			{
 				RenderSetUpFrame.this.centerCoordxTextField.setText("-0.98");
 				RenderSetUpFrame.this.centerCoordyTextField.setText("0.32");
 				RenderSetUpFrame.this.unitsPerPixelTextField.setText("0.0002");
 				RenderSetUpFrame.this.imageSizexTextField.setText("1366");
 				RenderSetUpFrame.this.imageSizeyTextField.setText("768");
-			} else if (((JButton)(e.getSource())).getText().equals(ex3Text)) // this took 119762 milliseconds first time, 115970 milliseconds second time
+			} else if (e.getSource() instanceof JButton && ((JButton)(e.getSource())).getText().equals(ex3Text)) // this took 119762 milliseconds first time, 115970 milliseconds second time
 			{
 				RenderSetUpFrame.this.centerCoordxTextField.setText("-0.7");
 				RenderSetUpFrame.this.centerCoordyTextField.setText("-0.355");
@@ -187,7 +236,7 @@ public class RenderSetUpFrame extends JFrame
 				 *         5 | 114786
 				 *       avg | 116857
 				 */
-			} else if (((JButton)(e.getSource())).getText().equals(saveText))
+			} else if (e.getSource() instanceof JButton && ((JButton)(e.getSource())).getText().equals(saveText))
 			{
 				if (!validateTextFields())
 				{
@@ -220,7 +269,15 @@ public class RenderSetUpFrame extends JFrame
 									rendering = true;
 									timeLabel.setText("currently rendering");
 									long t1 = System.currentTimeMillis();
-									BufferedImage img = Mandelbrot.getImage(bottomLeftX, bottomLeftY, unitsPerPixel, imageSizeX, imageSizeY, maxSteps, new CustomProgressListener());
+									BufferedImage img;
+									if (useThreadsCheckBox.isSelected())
+									{
+									    int numThreads = new Integer(numThreadsTextField.getText());
+									    img = Mandelbrot.getImageMultiThreaded(bottomLeftX, bottomLeftY, unitsPerPixel, imageSizeX, imageSizeY, maxSteps, new CustomProgressListener(), numThreads);
+									} else
+									{
+									    img = Mandelbrot.getImage(bottomLeftX, bottomLeftY, unitsPerPixel, imageSizeX, imageSizeY, maxSteps, new CustomProgressListener());
+									}
 									long t2 = System.currentTimeMillis();
 									timeLabel.setText("Done rendering: took " + (t2 - t1) + " milliseconds. Writing image to file...");
 									progressBar.setValue(100);
@@ -237,6 +294,15 @@ public class RenderSetUpFrame extends JFrame
 							};
 					thread.start(); // run this in a separate thread so the GUI doesn't freeze up as it renders
 				}
+			} else if (e.getSource() instanceof JCheckBox && ((JCheckBox)(e.getSource())).getText() == RenderSetUpFrame.this.useThreadsCheckBox.getText())
+			{
+			    if (useThreadsCheckBox.isSelected())
+			    {
+			        setUseThreads(true);
+			    } else
+			    {
+			        setUseThreads(false);
+			    }
 			}
 		}
 	}

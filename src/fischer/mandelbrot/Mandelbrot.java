@@ -2,13 +2,17 @@ package fischer.mandelbrot;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 
 public class Mandelbrot
 {	
 	/**
 	 * Returns an integer hue between 0 and 255.
 	 * @param m potential function as defined in wikipedia
-	 * @return
+	 * @return the hue
 	 */
 	public static float getHue(double m)
 	{
@@ -65,6 +69,43 @@ public class Mandelbrot
 	}
 	
 	/**
+	 * A multithreaded version of getImage.
+	 * 
+	 * Returns a smoothly-colored image of the Mandelbrot set
+     * @param bottomLeftX the bottom left corner location of the set to be drawn, x coordinate
+     * @param bottomLeftY the bottom left corner location of the set to be drawn, y coordinate
+     * @param unitsPerPixel how wide each pixel in the BufferedImage will be
+     * @param imageSizeX how many pixels wide the returned BufferedImage will be
+     * @param imageSizeY how many pixels tall the returned BufferedImage will be
+     * @param maxSteps how many iterations to perform before giving up
+     * @param progressListener an optional progressListener to call to tell it
+     * how close it is to being done, to update a progress bar. Leave null if
+     * you don't want to use this.
+     * @param numThreads how many threads to use to render the Mandelbrot set.
+     * @return a BufferedImage of the Mandelbrot set.
+	 */
+	public static BufferedImage getImageMultiThreaded(double bottomLeftX, double bottomLeftY, double unitsPerPixel, int imageSizeX, int imageSizeY, int maxSteps, ProgressListener progressListener, int numThreads)
+    {
+        BufferedImage image = new BufferedImage(imageSizeX, imageSizeY, BufferedImage.TYPE_INT_RGB);
+        AtomicIntegerArray rows = new AtomicIntegerArray(imageSizeY);
+        ExecutorService es = Executors.newFixedThreadPool(numThreads);
+        for (int i = 0; i < numThreads; i++)
+        {
+            es.execute(new MandelbrotThread(bottomLeftX, bottomLeftY, unitsPerPixel, maxSteps, imageSizeX, imageSizeY, rows, progressListener, image));
+        }
+        es.shutdown();
+        try
+        {
+            es.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS); // there should be a way to do this with no timeout
+        } catch (InterruptedException e)
+        {
+            // shouldn't happen
+            e.printStackTrace();
+        }
+        return image;
+    }
+	
+	/**
 	 * Reports how many steps until (a+bi) diverges under the sequence that determines the Mandelbrot set
 	 * Not used anywhere in current version.
 	 * @param a real part of the input
@@ -115,5 +156,4 @@ public class Mandelbrot
 		}
 		return -1;
 	}
-	
 }
