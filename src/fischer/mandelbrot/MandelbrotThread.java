@@ -45,10 +45,8 @@ public class MandelbrotThread extends Thread
         int currentRow = 0;
         while (currentRow < imageSizeY)
         {
-            if (rows.get(currentRow) == 1)
-            {
-                currentRow++;
-            } else
+            
+            if (rows.compareAndSet(currentRow, 0, 1))
             {
                 // we can render currentRow
                 rows.set(currentRow, 1);
@@ -71,6 +69,9 @@ public class MandelbrotThread extends Thread
                 {
                     progressListener.onProgressChanged((int)((double)currentRow / imageSizeY * 100));    
                 }
+            } else
+            {
+                currentRow++;
             }
         }
     }
